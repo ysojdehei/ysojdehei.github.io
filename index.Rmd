@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 <br>
 ```{r, echo=FALSE}
-knitr::include_graphics("picture.jpeg")
+knitr::include_graphics("/users/ysojd/Pictures/picture.jpeg")
 ```
 <h3>Education:</h3>
 - University of Texas at Dallas - B.S. GIS
