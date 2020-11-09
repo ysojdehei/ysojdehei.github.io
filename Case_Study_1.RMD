@@ -1,0 +1,461 @@
+---
+title: "Case_Study_1"
+author: "Team Project - Babatunde John Olanipekun, Yvan Sojdehei and Mingyang Nick YU"
+date: "9/30/2020"
+purpose: "This is a team case study aiming at exploring/analyzing dataset (Beers.csv and Breweries.csv) provided by CEO and CFO of Budweiser, answer specific questions and beyond"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r global-options, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+## Beer and Breweries Exploration
+Introduction: This is an exploratory data analysis for the data set between Beers.csv and Breweries.csv for CEO and CFO of Budweiser
+
+### Loading the datasets
+Doing intial inspection of data through various methods below.
+```{r}
+# dataset should be in the same folder of this RMD file
+Beers = read.csv("/Users/ysojd/Desktop/GRAD SCHOOL COURSEWORK/MSDS_6306_Doing-Data-Science-Master/MSDS_6306_Doing-Data-Science-Master/Unit 8 and 9 Case Study 1/Beers.csv",header = TRUE) #loading beers dataset
+Breweries = read.csv("/Users/ysojd/Desktop/GRAD SCHOOL COURSEWORK/MSDS_6306_Doing-Data-Science-Master/MSDS_6306_Doing-Data-Science-Master/Unit 8 and 9 Case Study 1/Breweries.csv",header = TRUE) #loading breweries dataset
+#below this line is for self analyzation
+#summary(Beers)
+#str(Beers)
+##Beers$IBU
+#summary(Breweries)
+#str(Breweries)
+#Above this line is for self analyzing can be deleted later
+# trim state column
+Breweries$State = trimws(Breweries$State)
+#Turn Breweries State column into a factor
+Breweries$State = as.factor(Breweries$State)
+```
+
+### How many breweries are present in each state?
+- As we can see by the plot below, each state's breweries count is displayed in a bar chart 
+- To make it easier to see which state has the most breweries, we assorted the breweries count by descending order
+```{r}
+library(dplyr)
+library(tidyverse) 
+library(ggplot2)
+num_Breweries_by_state <- Breweries %>% group_by(State) %>% dplyr::summarise(count=n())
+num_Breweries_by_state
+#As we can see the number of breweries per state is in the list below, to see this better we will use a plot to show results
+ggplot(data=num_Breweries_by_state)+
+  geom_bar(mapping=aes(x=State,y=count,fill=State),stat="identity") +
+  coord_flip()+
+  ggtitle("Breweries count by state")+xlab("State")+ylab("Count of Breweries")
+#To see this in order
+ggplot(data=num_Breweries_by_state)+
+  geom_bar(mapping=aes(x=reorder(State,-count),y=count,fill=State),stat="identity") +
+  coord_flip()+
+  ggtitle("Breweries count by state")+xlab("State")+ylab("Count of Breweries")
+```
+
+### Merge beer data with the breweries data. Print the first 6 observations and the last six observations to check the merged file.  
+```{r}
+Beers <- Beers %>% dplyr::rename(Brew_ID = Brewery_id)
+Beers.with.Breweries = left_join(Beers,Breweries, by = "Brew_ID")
+Beers.with.Breweries = Beers.with.Breweries %>% rename(Beer_Name= Name.x)
+Beers.with.Breweries = Beers.with.Breweries %>% rename(Brew_Name= Name.y)
+head(Beers.with.Breweries,6)
+```
+
+
+### Address the missing values in each column
+- There are 62 missing values on ABV column, and there are 1005 missing values on IBU column
+- Since 1005/2410 is too big of a percentage of missing value for column IBU, I decided to use Predictive mean matching method(widely used statistical imputation method for missing values, first proposed by Donald B. Rubin in 1986 and R. J. A. Little in 1988) to fill the missing data.
+- After generating and filling in the missing data, through density plot below, we can see the generated filled in value matches the original density plot. Thus minimize any bias from the researcher of arbitrarily filling in value or overeasily using the overall mean for all missing value
+```{r}
+summary(Beers.with.Breweries)
+library(mice) #Load mice library to analyze the pattern of missing data
+md.pattern(Beers.with.Breweries)
+# Since there is large amont of data missing in IBM column 
+#Try to impute the missing data with Predictive mean Matching method
+tempData <- mice(Beers.with.Breweries,m=5,maxit=50,meth='pmm',seed=20)
+#summary(tempData)
+# completed dataset after adding in generated predictive values
+completedData <- complete(tempData,1)
+#head(completedData)
+# Density plot original vs imputed dataset
+densityplot(tempData)
+#Note: idea used above to impute data is from link below:
+#https://datascienceplus.com/imputing-missing-data-with-r-mice-package/
+```
+### Compute the median alcohol content and international bitterness unit for each state. Plot a bar chart to compare
+- First plotted Median alcohol content by state, one with modified data set, and the other one with non-modified data set
+- Then plotted Median international bitterness unit for each state, both on the modified data set and non-modified
+- We can see between the modified data and non-modified data provides very different answers. If possible, going back to try to complete the missing data will make the graphics more accurate. But this is a random estimate of the actual value
+```{r}
+#Compute and display Median of ABV and IBU by state:
+median = completedData %>% group_by(State) %>%
+  summarize(median_ABV=median(ABV),median_IBU=median(IBU))
+median
+#Draw Bar Charts to compare
+#First plot median of alcohol content using modified data
+median %>% ggplot()+
+  geom_bar(mapping=aes(x=reorder(State,-median_ABV),y=median_ABV,fill=State),stat="identity") +
+  coord_flip()+
+  ggtitle("Median Alcohol content by State on modified dataset")+xlab("State")+ylab("Alcohol Content Percentage")
+#Below is result of using complete data set with missing data to plot median of alcohol content
+Beers.with.Breweries %>% group_by(State) %>%
+  summarize(median_ABV=median(ABV),median_IBU=median(IBU))%>% ggplot()+
+  geom_bar(mapping=aes(x=reorder(State,-median_ABV),y=median_ABV,fill=State),stat="identity")+
+  coord_flip()+
+  ggtitle("Median Alcohol content by State on non-Modified dataset")+xlab("State")+ylab("Alcohol Content Percentage")
+#Below is result of plotting median international bitterness unit for each state on modified data set
+median %>% ggplot()+
+  geom_bar(mapping=aes(x=reorder(State,-median_IBU),y=median_IBU,fill=State),stat="identity") +
+  coord_flip()+
+  ggtitle("Median International Bitterness Unit by State on modified dataset")+xlab("State")+ylab("International Bitterness Unit")
+#Below is result of using complete data set with missing data to plot median of alcohol content
+Beers.with.Breweries %>% group_by(State) %>%
+  summarize(median_ABV=median(ABV),median_IBU=median(IBU))%>% ggplot()+
+  geom_bar(mapping=aes(x=reorder(State,-median_IBU),y=median_IBU,fill=State),stat="identity") +
+  coord_flip()+
+  ggtitle("Median International Bitterness Unit by State on non-modified dataset")+xlab("State")+ylab("International Bitterness Unit")
+
+```
+
+### Exploring which state has the maximum alcoholic (ABV) beer and which state has the most bitter (IBU) beer
+- As we can see below, Colorado 'CO' has the maximum alcoholic(ABV) beer, it is (0.128)
+- This above result remain unchanged with the original data set
+- As we can see, Oregon and Michigan have the most bitter beer
+- Only Oregon has the most bitter beer in the unchanged data set. It means the Michigan beer bitterness value was imputed
+```{r}
+# Discover which state has the maximum alcoholic beer
+head(completedData %>%
+  arrange(desc(ABV)) %>% 
+  select(State,ABV,Beer_Name))
+
+# Boxplot
+completedData %>% ggplot(aes(x=ABV)) + 
+  geom_boxplot(fill="green",outlier.colour="red", outlier.shape=8,
+                outlier.size=4, width=0.1) +
+  ggtitle("Boxplot showing distribution of ABV values")+xlab("Alcohol by volume")
+
+# Discover with un-changed data set
+head(Beers.with.Breweries %>%
+  arrange(desc(ABV)) %>% 
+  select(State,ABV,Beer_Name))
+
+# Discover which state has the most bitter (IBU) beer
+head(completedData %>%
+  arrange(desc(IBU)) %>% 
+  select(State,IBU,Beer_Name))
+
+# Discover with un-changed data set
+head(Beers.with.Breweries %>%
+  arrange(desc(IBU)) %>% 
+  select(State,IBU,Beer_Name))
+  
+```
+
+### Comment on the summary statistics and distribution of the ABV variable.
+- **For the adjusted data set, we have**
+- Minimum ABV value: 0.001 (minimum value of the group, CEO and CFO might be interested)
+- First quartile ABV: 0.05
+- Median of ABV: 0.056 (center among the entire group, CEO and CFO might be interested)
+- Mean of ABV: 0.05975 (Average of the entire group, CEO and CFO might be interested)
+- Third Quartile ABV: 0.067
+- Maximum ABV: 0.128 (maximum value of the group, CEO and CFO might be interested)
+- **Comparing the adjusted Data and Unadjusted data, Statistics doesn't change much at all since it is imputed by Predictive mean matching method**
+
+```{r}
+# Summary of adjusted Data
+summary(completedData)
+# Summary of unadjusted Data
+summary(Beers.with.Breweries)
+```
+### Is there an apparent relationship between the bitterness of the beer and its alcoholic content?
+- **We can see from the scatter plot, there seem to be some sort of relationship between the two**
+- As ABV value increases, IBU seem to also increase
+- **This relationship seem to persist when we compare to the unmodified data**
+```{r}
+#first explore modified data
+completedData %>% 
+  ggplot(aes(x=ABV, y=IBU)) +
+  geom_point(size=2, shape=23, color = "dark green",position="jitter") +
+  geom_smooth(method=lm) +
+  ggtitle("IBU vs. ABV")+xlab("Alcohol by volume")+ylab("International Bitterness Unit")
+#next explore unmodified data
+Beers.with.Breweries %>% select(ABV, IBU, State) %>%
+  ggplot(aes(x=ABV, y=IBU)) +
+  geom_point(size=2, shape=23, color = "dark green",position="jitter") +
+  geom_smooth(method=lm) +
+  ggtitle("IBU vs. ABV")+xlab("Alcohol by volume")+ylab("International Bitterness Unit")
+  
+```
+
+### Budweiser would also like to investigate the difference with respect to IBU and ABV between IPAs (India Pale Ales) and other types of Ale (any beer with “Ale” in its name other than IPA).
+- There are total of 954 Beer name has Ale or IPA in it
+- 377 Beer name has India Pale Ales or IPA in it
+- 577 are other types of Ale
+- By using KNN model to try classifying India Pale Ales against other Ales
+- Initially try k=5 (five neighbors to compare):  Accuracy rate 0.79, sensitivity rate 0.65, Specificity rate 0.87
+- Then we explored what is the best k value to give the most accuracy, after exploring average of 500 random sample, k=9 is about the best accuracy rate given
+- Since Sensitivity is lowest among all, curious what is the best k for a good sensitivity rate?
+- By running such test, it suggest k>37 provides a better Sensitivity rate, and not sacrificing accuracy rate too much (So to balance our model, we choose k=45 and rerun the test)
+- In this scenario, we consider k=45 might be the best compromise to balance the model
+- Getting an average result of one hundred random generations from KNN model with k=45, Average Accuracy = 0.80, Average Sensitivity = 0.78, Average Specificity = 0.81
+- **Conclusion: By tuning the model between accuracy and sensitivity (specificity is already pretty good), we decided to use k=45 for our KNN model and got average rate of successfully predicting India Pale Ales of 0.78, Average rate of successfully predicting Other types of Ales at 0.81, and overall average accuracy rate at 0.80.**
+- Next try Naive Bayes Models to use probabilities to estimate different Ales based on IBU and ABV
+- After trying Naive Bayes Model with one random sample, Accuracy = 0.80, Sensitivity = 0.73, Specificity= 0.84
+- By getting the average of one hundred random generations from NB model, Average Accuracy = 0.78, Average Sensitivity= 0.68, Average Specificity = 0.85
+- **Conclusion with NB model - almost as good as KNN k=9 prediction model, but depending on what is more important to client, such as, is it more important to predict other ales accurately, predicting IPA accurately or overall accuracy is most important**
+```{r}
+#In order to investigate the difference respect to IBU and ABV, first extract all name with Ales
+#getting all bear name with ale in it (ignore the case factor)
+all_ales = completedData %>% filter(str_detect(completedData$Beer_Name,regex("Ale|IPA",ignore.case=TRUE)))
+india_pale_ales = all_ales %>% 
+  filter(str_detect(all_ales$Beer_Name,regex("India Pale Ale|IPA",ignore.case=TRUE)))
+other_ales = all_ales %>% 
+  filter(!str_detect(all_ales$Beer_Name,regex("India Pale Ale|IPA",ignore.case=TRUE)))
+# in order to effectively use KNN model, I decided to standardize percentage scale of ABV and IBU, so the effect of distance from ABV and IBU are roughly the same. I choose to use scale method to do so
+all_ales$ABV = scale(all_ales$ABV)
+all_ales$IBU = scale(all_ales$IBU)
+# Change other ales name to other ales in order to use KNN model to test whether we can use IBU and ABV to distinguish IPAs from others
+all_ales = all_ales %>% 
+  mutate(India.Pale.Ale.Or.Else = ifelse(str_detect(Beer_Name,regex("India Pale Ale|IPA",ignore.case=TRUE)),"India Pale Ale","Other Ale"))
+#all_ales$India.Pale.Ale.Or.Else
+# Start KNN test to see how good it is to use ABV and IBU to distinguish the Ales
+library(class)
+library(caret)
+library(e1071)
+all_ales$India.Pale.Ale.Or.Else = as.factor(all_ales$India.Pale.Ale.Or.Else)
+#Keep my result reproducible initially tried set.seed(100), try k=5
+set.seed(101)
+splitPerc = 0.8
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+# try k=5
+classifications = knn(train[,3:4],test[,3:4],train$India.Pale.Ale.Or.Else, prob = TRUE, k = 5)
+table(classifications,test$India.Pale.Ale.Or.Else)
+cm = confusionMatrix(table(classifications,test$India.Pale.Ale.Or.Else))
+cm
+# explore best possible K value for accuracy
+set.seed(101)
+iterations = 500
+numks = 50
+masterAcc = matrix(nrow = iterations, ncol = numks)
+  
+for(j in 1:iterations)
+{
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+for(i in 1:numks)
+{
+  classifications = knn(train[,3:4],test[,3:4],train$India.Pale.Ale.Or.Else, prob = TRUE, k = i)
+  table(classifications,test$India.Pale.Ale.Or.Else)
+  CM = confusionMatrix(table(classifications,test$India.Pale.Ale.Or.Else))
+  masterAcc[j,i] = CM$overall[1]
+}
+}
+MeanAcc = colMeans(masterAcc)
+plot(seq(1,numks,1),MeanAcc, type = "l",main="mean Accuracy vs. different K (number of neighbor used to predict)",
+     ylab="Mean Accuracy",xlab="k used")
+
+
+# explore best possible K value for sensitivity
+set.seed(101)
+iterations = 500
+numks = 50
+masterSen = matrix(nrow = iterations, ncol = numks)
+  
+for(j in 1:iterations)
+{
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+for(i in 1:numks)
+{
+  classifications = knn(train[,3:4],test[,3:4],train$India.Pale.Ale.Or.Else, prob = TRUE, k = i)
+  table(classifications,test$India.Pale.Ale.Or.Else)
+  CM = confusionMatrix(table(classifications,test$India.Pale.Ale.Or.Else))
+  masterSen[j,i] = CM$byClass[1]
+}
+}
+MeanSen = colMeans(masterSen)
+plot(seq(1,numks,1),MeanSen, type = "l",main="mean Sensitivity vs. different K (number of neighbor used to predict)",
+     ylab="Mean Sensitivity",xlab="k used")
+
+
+#Get an average percentage of Accuracy, Sensitivity, and Specificity of KNN model k=45
+set.seed(101)
+iterations = 100
+numks = 50
+masterAcc = matrix(nrow = iterations, ncol = 1)
+masterSen = matrix(nrow = iterations, ncol = 1)
+masterSpec = matrix(nrow = iterations, ncol = 1)
+for(j in 1:iterations)
+{
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+classifications = knn(train[,3:4],test[,3:4],train$India.Pale.Ale.Or.Else, prob = TRUE, k = 45)
+CM = confusionMatrix(table(classifications,test$India.Pale.Ale.Or.Else))
+masterAcc[j,1]=CM$overall[1]
+masterSen[j,1]=CM$byClass[1]
+masterSpec[j,1]=CM$byClass[2]
+}
+MeanAcc = colMeans(masterAcc)
+MeanSen = colMeans(masterSen)
+MeanSpec = colMeans(masterSpec)
+MeanAcc
+MeanSen
+MeanSpec
+
+# Try using Naive Bayes see if it will improve results, split 0.8:
+set.seed(102)
+splitPerc = 0.8
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+#NB model
+model = naiveBayes(train[,3:4],train$India.Pale.Ale.Or.Else)
+CM = confusionMatrix(table(predict(model,test[,3:4]),test$India.Pale.Ale.Or.Else))
+CM
+
+# Try getting average of Accuracy, Sensitivity and Specificity rate using NB model from 100 random generators
+set.seed(101)
+splitPerc = .8
+iterations = 100
+masterAcc = matrix(nrow = iterations, ncol = 1)
+masterSen = matrix(nrow = iterations, ncol = 1)
+masterSpec = matrix(nrow = iterations, ncol = 1)
+for(j in 1:iterations)
+{
+trainIndices = sample(1:dim(all_ales)[1],round(splitPerc * dim(all_ales)[1]))
+train = all_ales[trainIndices,]
+test = all_ales[-trainIndices,]
+#NB model
+model = naiveBayes(train[,3:4],train$India.Pale.Ale.Or.Else)
+CM = confusionMatrix(table(predict(model,test[,3:4]),test$India.Pale.Ale.Or.Else))
+masterAcc[j,1]=CM$overall[1]
+masterSen[j,1]=CM$byClass[1]
+masterSpec[j,1]=CM$byClass[2]
+
+}
+
+MeanAcc = colMeans(masterAcc)
+MeanSen = colMeans(masterSen)
+MeanSpec = colMeans(masterSpec)
+MeanAcc
+MeanSen
+MeanSpec
+```
+
+### Further exploration -- Free Style 
+- Explore Types of Ales produced in each city (Which cities contribute to most varieties of Ales?)
+- Explore all bear counts by city
+- Explore average ABV content produced by state (Which states produces higher average ABV content, which states lower?)
+- **Note: Since map_data library don't have Hawaii and Alaska map data to plot, that's why it is not showing on the map, even we have a few breweries in those states.**
+
+### Density of Ales count by city
+```{r}
+#import map library
+library(maps)
+library(plotly)
+# Import US Cities location data
+uscities <- read.csv("/Users/ysojd/Desktop/GRAD SCHOOL COURSEWORK/MSDS_6306_Doing-Data-Science-Master/MSDS_6306_Doing-Data-Science-Master/Case Study 1/uscities.csv",header = TRUE)
+uscities = uscities%>%rename(City = city) 
+uscities = uscities%>% group_by(City) %>% filter(row_number()==1)
+#Loading in State Coordinates
+state_coord <- read.csv("/Users/ysojd/Desktop/GRAD SCHOOL COURSEWORK/MSDS_6306_Doing-Data-Science-Master/MSDS_6306_Doing-Data-Science-Master/Case Study 1/MSDS6306-Case-Study1-master/states_coord.csv",header = TRUE)
+# Getting all Ales Beer available
+allAles2 = completedData %>% filter(str_detect(completedData$Beer_Name,regex("Ale",ignore.case=TRUE)))
+dataWithMap = left_join(allAles2,uscities, by = "City")
+#str(dataWithMap)
+#dataWithMap %>% filter((is.na(lng))|(is.na(lat))) %>% select(Brew_Name,City)
+dataWithMap2 = dataWithMap %>% select(Beer_Name,City,lat,lng,state)
+#head(dataWithMap2,100)
+dataWithMap3 = dataWithMap2 %>% group_by(City) %>% mutate(count = n())
+dataWithMap3 = dataWithMap3 %>% group_by(City)%>%filter(row_number()==1)%>%
+  filter((!is.na(lng))&(!is.na(lat)))
+states <- map_data("state")
+p <- ggplot() + 
+  geom_polygon(data = states, aes(x = long, y = lat, group = group), fill = "yellow", color = "black") + 
+  coord_quickmap()
+
+p <-p + geom_point(data = dataWithMap3, aes(x = lng, y = lat, size=count,alpha=count),color="blue")+
+  geom_text(data = state_coord, aes(x = longitude, y = latitude, label = state))+
+  ggtitle("Density of Ales count by City") + xlab("Longitude")+ylab("Latitute")
+ggplotly(p)
+```
+
+### All Beer types count by City
+```{r}
+# Getting all Beer available
+dataWithMap = left_join(completedData,uscities, by = "City")
+#str(dataWithMap)
+#dataWithMap %>% filter((is.na(lng))|(is.na(lat))) %>% select(Brew_Name,City)
+dataWithMap2 = dataWithMap %>% select(Beer_Name,City,lat,lng,state)
+#head(dataWithMap2,100)
+dataWithMap3 = dataWithMap2 %>% group_by(City) %>% mutate(count = n())
+dataWithMap3 = dataWithMap3 %>% group_by(City)%>%filter(row_number()==1)%>%
+  filter((!is.na(lng))&(!is.na(lat)))
+states <- map_data("state")
+p <- ggplot() + 
+  geom_polygon(data = states, aes(x = long, y = lat, group = group), fill = "yellow", color = "black") + 
+  coord_quickmap()
+
+p <-p + geom_point(data = dataWithMap3, aes(x = lng, y = lat, size=count,alpha=count),color="blue")+
+  geom_text(data = state_coord, aes(x = longitude, y = latitude, label = state))+
+  ggtitle("Density of all Beer count by City") + xlab("Longitude")+ylab("Latitute")
+ggplotly(p)
+
+```
+
+### Average ABV Heatmap (by state)
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(mapproj)
+library(plyr)
+
+lookup = data.frame(abb = state.abb, State = state.name) #makes a data frame with State name and abbreviation. 
+#lookup
+colnames(completedData)[10] = "abb"
+completedData$abb = as.character(completedData$abb)
+
+Breweries2 = merge(completedData,lookup, by.x = "abb", by.y="abb", all.x=TRUE) # make one dataset with state names and abb
+#Breweries2
+Breweries2$ABV <- as.numeric(Breweries2$ABV)
+BreweriesMapData <- Breweries2 %>% select(ABV, State) %>% group_by(State)
+#BreweriesMapData
+BreweriesMapData <- aggregate(. ~ State, BreweriesMapData, mean)
+
+BreweriesMapData$region <- tolower(BreweriesMapData$State)
+BreweriesMapData = BreweriesMapData[-1]
+#BreweriesMapData
+states <- map_data("state")
+#states
+map.df <- full_join(states,BreweriesMapData, by="region", all.x=T)
+#map.df
+map.df <- map.df[order(map.df$order),]
+h <- ggplot(map.df, aes(x=long,y=lat))+
+  geom_polygon(aes(fill=ABV))+
+  geom_path(aes(group=group))+
+  geom_text(data = state_coord, aes(x = longitude, y = latitude, label = state))+
+  scale_fill_gradientn(colours=rev(heat.colors(5)),na.value="grey90")+ggtitle("Average ABV By State")+
+coord_map()
+ggplotly(h)
+```
+
+
+
+
+
+
+
+
+
+
+

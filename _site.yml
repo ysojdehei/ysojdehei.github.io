@@ -1,0 +1,10 @@
+theme: jekyll-theme-midnight
+title: Doing Data Science Highlight Reel
+description: Welcome to My Page
+navbar:
+  title: "My Website"
+  left:
+    - text: "Home"
+      href: index.html
+    - text: "Case Study 1"
+      href: Case_Study_1.html
